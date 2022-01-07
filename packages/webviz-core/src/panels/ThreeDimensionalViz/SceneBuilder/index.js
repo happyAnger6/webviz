@@ -57,11 +57,14 @@ import {
   MARKER_MSG_TYPES,
   RADAR_POINT_CLOUD,
   WRAPPED_POINT_CLOUD,
+  CARGO_MAIN_LIDAR$MSG,
 } from "webviz-core/src/util/globalConstants";
 import naturalSort from "webviz-core/src/util/naturalSort";
 import { emptyPose } from "webviz-core/src/util/Pose";
 import sendNotification from "webviz-core/src/util/sendNotification";
 import { fromSec } from "webviz-core/src/util/time";
+import { CARGO_MAIN_LIDAR_LEFT_MSG } from "../../../util/globalConstants";
+import { toRosDrawData } from "../commands/PointClouds/cargoPointCloud";
 
 export type TopicSettingsCollection = {
   [topicOrNamespaceKey: string]: any,
@@ -728,6 +731,33 @@ export default class SceneBuilder implements MarkerProvider {
     this.collectors[topic].addNonMarker(topic, mappedMessage, lifetime);
   };
 
+  _consumeCargoLidarMessage = (topic: string, drawData: StampedMessage, type: number, originalMessage: ?any): void => {
+    const sourcePose = emptyPose();
+    const draw_data = toRosDrawData(drawData);
+    const pose = this.transforms.apply(sourcePose, sourcePose, draw_data.header.frame_id, this.rootTransformID);
+    if (!pose) {
+      const error = this._addError(this.errors.topicsMissingTransforms, topic);
+      error.frameIds.add(draw_data.header.frame_id);
+      return;
+    }
+
+    const { overrideColor } = this._settingsByKey[`t:${topic}`] || {};
+    const mappedMessage = {
+      ...draw_data,
+      ...(overrideColor ? { color: overrideColor } : undefined),
+      type,
+      pose,
+      interactionData: { topic, originalMessage:draw_data },
+    };
+
+    // If a decay time is available, we assign a lifetime to this message
+    // Do not automatically assign a 0 (zero) decay time since that translates
+    // to an infinite lifetime. But do allow for 0 values based on user preferences.
+    const decayTimeInSec = this._settingsByKey[`t:${topic}`]?.decayTime;
+    const lifetime = decayTimeInSec ? fromSec(decayTimeInSec) : undefined;
+    this.collectors[topic].addNonMarker(topic, mappedMessage, lifetime);
+  };
+
   setCurrentTime = (currentTime: { sec: number, nsec: number }) => {
     this.resetMinZ();
 
@@ -804,6 +834,9 @@ export default class SceneBuilder implements MarkerProvider {
       }
       case SENSOR_MSGS$POINT_CLOUD_2:
         this._consumeNonMarkerMessage(topic, deepParse(message), 102);
+        break;
+      case CARGO_MAIN_LIDAR$MSG:
+        this._consumeCargoLidarMessage(topic, message, 102);
         break;
       case SENSOR_MSGS$LASER_SCAN:
         this._consumeNonMarkerMessage(topic, deepParse(message), 104);

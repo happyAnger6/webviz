@@ -15,7 +15,7 @@ export interface FieldReader {
 
 // Shared between all readers. The JS main thread doesn't get preempted. Instantiating the buffer is
 // weirdly expensive. The buffer needs to be big enough for the largest reader type.
-const buffer = new ArrayBuffer(4);
+const buffer = new ArrayBuffer(8);
 const view = new DataView(buffer);
 
 export class Float32Reader implements FieldReader {
@@ -30,6 +30,25 @@ export class Float32Reader implements FieldReader {
     view.setUint8(2, data[index + this.offset + 2]);
     view.setUint8(3, data[index + this.offset + 3]);
     return view.getFloat32(0, true);
+  }
+}
+
+export class Int64Reader implements FieldReader {
+  offset: number;
+  constructor(offset: number) {
+    this.offset = offset;
+  }
+
+  read(data: number[] | Uint8Array, index: number): number {
+    view.setUint8(0, data[index + this.offset]);
+    view.setUint8(1, data[index + this.offset + 1]);
+    view.setUint8(2, data[index + this.offset + 2]);
+    view.setUint8(3, data[index + this.offset + 3]);
+    view.setUint8(4, data[index + this.offset + 4]);
+    view.setUint8(5, data[index + this.offset + 5]);
+    view.setUint8(6, data[index + this.offset + 6]);
+    view.setUint8(7, data[index + this.offset + 7]);
+    return view.getFloat64(0, true);
   }
 }
 
